@@ -14,6 +14,7 @@ import org.bukkit.block.data.type.RedstoneWire;
 import org.bukkit.block.data.type.Switch;
 import org.bukkit.block.data.type.RedstoneWire.Connection;
 import org.bukkit.block.data.type.Switch.Face;
+import org.bukkit.block.data.type.Observer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -35,7 +36,7 @@ public class OnInteractBell implements Listener {
         new BukkitRunnable(){
             @Override
             public void run() {
-                if(event.getOldCurrent() > event.getNewCurrent()) {
+                if(event.getOldCurrent() != 0) {
                     return;
                 }
                 Block block = event.getBlock();
@@ -50,7 +51,8 @@ public class OnInteractBell implements Listener {
                     Material.DARK_OAK_BUTTON,
                     Material.SPRUCE_BUTTON,
                     Material.ACACIA_BUTTON,
-                    Material.JUNGLE_BUTTON
+                    Material.JUNGLE_BUTTON,
+                    Material.STONE_BUTTON
                 ).anyMatch(m -> m == type)) {
                     Face face = ((Switch)block.getBlockData()).getFace();
                     if(face == Face.CEILING) {
@@ -68,7 +70,8 @@ public class OnInteractBell implements Listener {
                     Material.ACACIA_PRESSURE_PLATE,
                     Material.JUNGLE_PRESSURE_PLATE,
                     Material.LIGHT_WEIGHTED_PRESSURE_PLATE,
-                    Material.HEAVY_WEIGHTED_PRESSURE_PLATE
+                    Material.HEAVY_WEIGHTED_PRESSURE_PLATE,
+                    Material.STONE_PRESSURE_PLATE
                 ).anyMatch(m -> m == type)) {
                     weakPoweredFaces.add(BlockFace.DOWN);
                 } else if(Stream.of(
@@ -88,7 +91,18 @@ public class OnInteractBell implements Listener {
                             weakPoweredFaces.add(blockFace.getOppositeFace());
                             strongPoweredFaces.add(blockFace.getOppositeFace());
                         }
-                    }            
+                    }
+                    if(strongPoweredFaces.isEmpty()) {
+                        strongPoweredFaces.addAll(Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST, BlockFace.DOWN));
+                        weakPoweredFaces.addAll(Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST, BlockFace.DOWN));
+                    } else if(strongPoweredFaces.size() >= 2) {
+                        strongPoweredFaces.clear();
+                        weakPoweredFaces.clear();
+                    }
+                    strongPoweredFaces.add(BlockFace.DOWN);
+                    weakPoweredFaces.add(BlockFace.DOWN);
+                } else if(type == Material.OBSERVER) {
+                    weakPoweredFaces.add(((Observer)block.getBlockData()).getFacing().getOppositeFace());
                 }
 
                 HashSet<Block> rungBells = new HashSet<Block>();
