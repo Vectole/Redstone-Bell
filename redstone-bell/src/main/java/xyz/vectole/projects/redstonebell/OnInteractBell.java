@@ -20,7 +20,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockRedstoneEvent;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.craftbukkit.v1_14_R1.entity.CraftPlayer;
 
 import net.minecraft.server.v1_14_R1.BlockPosition;
@@ -33,14 +32,18 @@ public class OnInteractBell implements Listener {
     
     @EventHandler
     void onInteractBell(BlockRedstoneEvent event) {
+        // only works on the rising edge of redstone
         if(event.getOldCurrent() != 0) {
             return;
         }
         Block block = event.getBlock();
         Material type = block.getType();
         
-        HashSet<BlockFace> weakPoweredFaces = new HashSet<BlockFace>();
-        HashSet<BlockFace> strongPoweredFaces = new HashSet<BlockFace>();
+        // holds blocks that get powered by being near a redstone device (e.g. lamp next to a pressure plate, in this case a bell)
+        HashSet<BlockFace> proximityPoweredFaces = new HashSet<BlockFace>();
+        // holds blocks that get powered by a redstone device directly (e.g. Redstone repeater output)
+        HashSet<BlockFace> directPoweredFaces = new HashSet<BlockFace>();
+
         if(Stream.of(
             Material.LEVER,
             Material.ACACIA_BUTTON,
@@ -53,11 +56,11 @@ public class OnInteractBell implements Listener {
         ).anyMatch(m -> m == type)) {
             Face face = ((Switch)block.getBlockData()).getFace();
             if(face == Face.CEILING) {
-                weakPoweredFaces.add(BlockFace.UP);
+                directPoweredFaces.add(BlockFace.UP);
             } else if(face == Face.FLOOR) {
-                weakPoweredFaces.add(BlockFace.DOWN);
+                directPoweredFaces.add(BlockFace.DOWN);
             } else {
-                weakPoweredFaces.add(((Switch)block.getBlockData()).getFacing().getOppositeFace());
+                directPoweredFaces.add(((Switch)block.getBlockData()).getFacing().getOppositeFace());
             }
         } else if(Stream.of(
             Material.ACACIA_PRESSURE_PLATE,
@@ -70,43 +73,46 @@ public class OnInteractBell implements Listener {
             Material.HEAVY_WEIGHTED_PRESSURE_PLATE,
             Material.STONE_PRESSURE_PLATE
         ).anyMatch(m -> m == type)) {
-            weakPoweredFaces.add(BlockFace.DOWN);
+            directPoweredFaces.add(BlockFace.DOWN);
         } else if(Stream.of(
             Material.REPEATER,
             Material.COMPARATOR
         ).anyMatch(m -> m == type)) {
-            weakPoweredFaces.add(((Directional)block.getBlockData()).getFacing().getOppositeFace());
-            strongPoweredFaces.add(((Directional)block.getBlockData()).getFacing().getOppositeFace());
+            directPoweredFaces.add(((Directional)block.getBlockData()).getFacing().getOppositeFace());
+            proximityPoweredFaces.add(((Directional)block.getBlockData()).getFacing().getOppositeFace());
         } else if(Stream.of(
             Material.REDSTONE_TORCH,
             Material.REDSTONE_WALL_TORCH
         ).anyMatch(m -> m == type)) {
-            weakPoweredFaces.add(BlockFace.UP);
+            directPoweredFaces.add(BlockFace.UP);
         } else if(type == Material.REDSTONE_WIRE) {
             for(BlockFace blockFace : Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST)) {
                 if(((RedstoneWire)block.getBlockData()).getFace(blockFace) == Connection.SIDE) {
-                    weakPoweredFaces.add(blockFace.getOppositeFace());
-                    strongPoweredFaces.add(blockFace.getOppositeFace());
+                    directPoweredFaces.add(blockFace.getOppositeFace());
+                    proximityPoweredFaces.add(blockFace.getOppositeFace());
                 }
             }
-            if(strongPoweredFaces.isEmpty()) {
-                strongPoweredFaces.addAll(Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST, BlockFace.DOWN));
-                weakPoweredFaces.addAll(Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST, BlockFace.DOWN));
-            } else if(strongPoweredFaces.size() >= 2) {
-                strongPoweredFaces.clear();
-                weakPoweredFaces.clear();
+            if(proximityPoweredFaces.isEmpty()) {
+                proximityPoweredFaces.addAll(Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST, BlockFace.DOWN));
+                directPoweredFaces.addAll(Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST, BlockFace.DOWN));
+            } else if(proximityPoweredFaces.size() >= 2) {
+                proximityPoweredFaces.clear();
+                directPoweredFaces.clear();
             }
-            strongPoweredFaces.add(BlockFace.DOWN);
-            weakPoweredFaces.add(BlockFace.DOWN);
+            proximityPoweredFaces.add(BlockFace.DOWN);
+            directPoweredFaces.add(BlockFace.DOWN);
         } else if(type == Material.OBSERVER) {
-            weakPoweredFaces.add(((Observer)block.getBlockData()).getFacing().getOppositeFace());
+            directPoweredFaces.add(((Observer)block.getBlockData()).getFacing().getOppositeFace());
         }
 
-        HashSet<Block> rungBells = new HashSet<Block>();
-        if(strongPoweredFaces.isEmpty()) {
-            strongPoweredFaces.addAll(allFaces);
+        if(proximityPoweredFaces.isEmpty()) {
+            proximityPoweredFaces.addAll(allFaces);
         }
-        for(BlockFace blockFace : strongPoweredFaces) {
+        // holds bells that were rung to avoid powering them again
+        HashSet<Block> rungBells = new HashSet<Block>();
+        
+        // only activates bells if they are adjacent to blockfaces in PoweredFaces hashmaps
+        for(BlockFace blockFace : proximityPoweredFaces) {
             Block adjacentBlock = block.getRelative(blockFace);
             Material adjacentType = adjacentBlock.getType();
             if(adjacentType == Material.BELL) {
@@ -116,23 +122,26 @@ public class OnInteractBell implements Listener {
                 rungBells.add(adjacentBlock);
                 playBellEffects(adjacentBlock);
             }
-            if(weakPoweredFaces.contains(blockFace)) {
-                if(adjacentType.isSolid()) {
-                    for(BlockFace bf : allFaces) {
-                        Block b = adjacentBlock.getRelative(bf);
-                        if(b.getType() == Material.BELL) {
-                            if(rungBells.contains(b)) {
-                                continue;
-                            }
-                            rungBells.add(b);
-                            playBellEffects(b);
-                        }
+            if(directPoweredFaces.contains(blockFace) == false && adjacentType.isSolid() == false) {
+                continue;
+            }
+            for(BlockFace bf : allFaces) {
+                Block b = adjacentBlock.getRelative(bf);
+                if(b.getType() == Material.BELL) {
+                    if(rungBells.contains(b)) {
+                        continue;
                     }
+                    rungBells.add(b);
+                    playBellEffects(b);
                 }
             }
         }
     }
 
+    /**
+     * Sends every nearby player the animation and sound of a bell ringing
+     * @param block - the block which is a bell
+     */
     private void playBellEffects(Block block) {
         World world = block.getWorld();
         world.playSound(block.getLocation(), Sound.BLOCK_BELL_USE, 3.0f, 1.0f);
