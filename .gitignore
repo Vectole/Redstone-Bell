@@ -1,5 +1,5 @@
 /redstone-bell/target
-/redstone-bell/src/main/resources
+/redstone-bell/src/main/resources/*.jar
 *.code-workspace
 *.log
 /redstone-bell/.settings
