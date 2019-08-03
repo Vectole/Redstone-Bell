@@ -1,5 +1,5 @@
 main: xyz.vectole.projects.redstonebell.Main
 name: RedstoneBell
-version: 1.0
+version: 1.0.1
 api-version: 1.14
 description: Plugin that enables bell ringing via redstone.
