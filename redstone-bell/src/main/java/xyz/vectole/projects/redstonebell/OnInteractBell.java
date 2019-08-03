@@ -33,109 +33,104 @@ public class OnInteractBell implements Listener {
     
     @EventHandler
     void onInteractBell(BlockRedstoneEvent event) {
-        new BukkitRunnable(){
-            @Override
-            public void run() {
-                if(event.getOldCurrent() != 0) {
-                    return;
+        if(event.getOldCurrent() != 0) {
+            return;
+        }
+        Block block = event.getBlock();
+        Material type = block.getType();
+        
+        HashSet<BlockFace> weakPoweredFaces = new HashSet<BlockFace>();
+        HashSet<BlockFace> strongPoweredFaces = new HashSet<BlockFace>();
+        if(Stream.of(
+            Material.LEVER,
+            Material.ACACIA_BUTTON,
+            Material.OAK_BUTTON,
+            Material.DARK_OAK_BUTTON,
+            Material.SPRUCE_BUTTON,
+            Material.ACACIA_BUTTON,
+            Material.JUNGLE_BUTTON,
+            Material.STONE_BUTTON
+        ).anyMatch(m -> m == type)) {
+            Face face = ((Switch)block.getBlockData()).getFace();
+            if(face == Face.CEILING) {
+                weakPoweredFaces.add(BlockFace.UP);
+            } else if(face == Face.FLOOR) {
+                weakPoweredFaces.add(BlockFace.DOWN);
+            } else {
+                weakPoweredFaces.add(((Switch)block.getBlockData()).getFacing().getOppositeFace());
+            }
+        } else if(Stream.of(
+            Material.ACACIA_PRESSURE_PLATE,
+            Material.OAK_PRESSURE_PLATE,
+            Material.DARK_OAK_PRESSURE_PLATE,
+            Material.SPRUCE_PRESSURE_PLATE,
+            Material.ACACIA_PRESSURE_PLATE,
+            Material.JUNGLE_PRESSURE_PLATE,
+            Material.LIGHT_WEIGHTED_PRESSURE_PLATE,
+            Material.HEAVY_WEIGHTED_PRESSURE_PLATE,
+            Material.STONE_PRESSURE_PLATE
+        ).anyMatch(m -> m == type)) {
+            weakPoweredFaces.add(BlockFace.DOWN);
+        } else if(Stream.of(
+            Material.REPEATER,
+            Material.COMPARATOR
+        ).anyMatch(m -> m == type)) {
+            weakPoweredFaces.add(((Directional)block.getBlockData()).getFacing().getOppositeFace());
+            strongPoweredFaces.add(((Directional)block.getBlockData()).getFacing().getOppositeFace());
+        } else if(Stream.of(
+            Material.REDSTONE_TORCH,
+            Material.REDSTONE_WALL_TORCH
+        ).anyMatch(m -> m == type)) {
+            weakPoweredFaces.add(BlockFace.UP);
+        } else if(type == Material.REDSTONE_WIRE) {
+            for(BlockFace blockFace : Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST)) {
+                if(((RedstoneWire)block.getBlockData()).getFace(blockFace) == Connection.SIDE) {
+                    weakPoweredFaces.add(blockFace.getOppositeFace());
+                    strongPoweredFaces.add(blockFace.getOppositeFace());
                 }
-                Block block = event.getBlock();
-                Material type = block.getType();
-                
-                HashSet<BlockFace> weakPoweredFaces = new HashSet<BlockFace>();
-                HashSet<BlockFace> strongPoweredFaces = new HashSet<BlockFace>();
-                if(Stream.of(
-                    Material.LEVER,
-                    Material.ACACIA_BUTTON,
-                    Material.OAK_BUTTON,
-                    Material.DARK_OAK_BUTTON,
-                    Material.SPRUCE_BUTTON,
-                    Material.ACACIA_BUTTON,
-                    Material.JUNGLE_BUTTON,
-                    Material.STONE_BUTTON
-                ).anyMatch(m -> m == type)) {
-                    Face face = ((Switch)block.getBlockData()).getFace();
-                    if(face == Face.CEILING) {
-                        weakPoweredFaces.add(BlockFace.UP);
-                    } else if(face == Face.FLOOR) {
-                        weakPoweredFaces.add(BlockFace.DOWN);
-                    } else {
-                        weakPoweredFaces.add(((Switch)block.getBlockData()).getFacing().getOppositeFace());
-                    }
-                } else if(Stream.of(
-                    Material.ACACIA_PRESSURE_PLATE,
-                    Material.OAK_PRESSURE_PLATE,
-                    Material.DARK_OAK_PRESSURE_PLATE,
-                    Material.SPRUCE_PRESSURE_PLATE,
-                    Material.ACACIA_PRESSURE_PLATE,
-                    Material.JUNGLE_PRESSURE_PLATE,
-                    Material.LIGHT_WEIGHTED_PRESSURE_PLATE,
-                    Material.HEAVY_WEIGHTED_PRESSURE_PLATE,
-                    Material.STONE_PRESSURE_PLATE
-                ).anyMatch(m -> m == type)) {
-                    weakPoweredFaces.add(BlockFace.DOWN);
-                } else if(Stream.of(
-                    Material.REPEATER,
-                    Material.COMPARATOR
-                ).anyMatch(m -> m == type)) {
-                    weakPoweredFaces.add(((Directional)block.getBlockData()).getFacing().getOppositeFace());
-                    strongPoweredFaces.add(((Directional)block.getBlockData()).getFacing().getOppositeFace());
-                } else if(Stream.of(
-                    Material.REDSTONE_TORCH,
-                    Material.REDSTONE_WALL_TORCH
-                ).anyMatch(m -> m == type)) {
-                    weakPoweredFaces.add(BlockFace.UP);
-                } else if(type == Material.REDSTONE_WIRE) {
-                    for(BlockFace blockFace : Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST)) {
-                        if(((RedstoneWire)block.getBlockData()).getFace(blockFace) == Connection.SIDE) {
-                            weakPoweredFaces.add(blockFace.getOppositeFace());
-                            strongPoweredFaces.add(blockFace.getOppositeFace());
-                        }
-                    }
-                    if(strongPoweredFaces.isEmpty()) {
-                        strongPoweredFaces.addAll(Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST, BlockFace.DOWN));
-                        weakPoweredFaces.addAll(Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST, BlockFace.DOWN));
-                    } else if(strongPoweredFaces.size() >= 2) {
-                        strongPoweredFaces.clear();
-                        weakPoweredFaces.clear();
-                    }
-                    strongPoweredFaces.add(BlockFace.DOWN);
-                    weakPoweredFaces.add(BlockFace.DOWN);
-                } else if(type == Material.OBSERVER) {
-                    weakPoweredFaces.add(((Observer)block.getBlockData()).getFacing().getOppositeFace());
-                }
+            }
+            if(strongPoweredFaces.isEmpty()) {
+                strongPoweredFaces.addAll(Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST, BlockFace.DOWN));
+                weakPoweredFaces.addAll(Arrays.asList(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST, BlockFace.DOWN));
+            } else if(strongPoweredFaces.size() >= 2) {
+                strongPoweredFaces.clear();
+                weakPoweredFaces.clear();
+            }
+            strongPoweredFaces.add(BlockFace.DOWN);
+            weakPoweredFaces.add(BlockFace.DOWN);
+        } else if(type == Material.OBSERVER) {
+            weakPoweredFaces.add(((Observer)block.getBlockData()).getFacing().getOppositeFace());
+        }
 
-                HashSet<Block> rungBells = new HashSet<Block>();
-                if(strongPoweredFaces.isEmpty()) {
-                    strongPoweredFaces.addAll(allFaces);
+        HashSet<Block> rungBells = new HashSet<Block>();
+        if(strongPoweredFaces.isEmpty()) {
+            strongPoweredFaces.addAll(allFaces);
+        }
+        for(BlockFace blockFace : strongPoweredFaces) {
+            Block adjacentBlock = block.getRelative(blockFace);
+            Material adjacentType = adjacentBlock.getType();
+            if(adjacentType == Material.BELL) {
+                if(rungBells.contains(adjacentBlock)) {
+                    continue;
                 }
-                for(BlockFace blockFace : strongPoweredFaces) {
-                    Block adjacentBlock = block.getRelative(blockFace);
-                    Material adjacentType = adjacentBlock.getType();
-                    if(adjacentType == Material.BELL) {
-                        if(rungBells.contains(adjacentBlock)) {
-                            continue;
-                        }
-                        rungBells.add(adjacentBlock);
-                        playBellEffects(adjacentBlock);
-                    }
-                    if(weakPoweredFaces.contains(blockFace)) {
-                        if(adjacentType.isSolid()) {
-                            for(BlockFace bf : allFaces) {
-                                Block b = adjacentBlock.getRelative(bf);
-                                if(b.getType() == Material.BELL) {
-                                    if(rungBells.contains(b)) {
-                                        continue;
-                                    }
-                                    rungBells.add(b);
-                                    playBellEffects(b);
-                                }
+                rungBells.add(adjacentBlock);
+                playBellEffects(adjacentBlock);
+            }
+            if(weakPoweredFaces.contains(blockFace)) {
+                if(adjacentType.isSolid()) {
+                    for(BlockFace bf : allFaces) {
+                        Block b = adjacentBlock.getRelative(bf);
+                        if(b.getType() == Material.BELL) {
+                            if(rungBells.contains(b)) {
+                                continue;
                             }
+                            rungBells.add(b);
+                            playBellEffects(b);
                         }
                     }
                 }
             }
-        }.runTaskAsynchronously(Main.getInstance());
+        }
     }
 
     private void playBellEffects(Block block) {
